@@ -1,0 +1,35 @@
+#!/bin/bash
+#
+# disk_alert.sh - Alert if disk usage crosses a threshold
+# Usage: ./disk_alert.sh [threshold_percent]
+#
+# Default threshold is 80%. Sends an email alert via sendmail/mailx
+# if any mounted filesystem exceeds the threshold.
+
+set -euo pipefail
+
+THRESHOLD="${1:-80}"
+ALERT_EMAIL="admin@example.com"
+HOSTNAME=$(hostname)
+
+ALERT_TRIGGERED=0
+REPORT=""
+
+while read -r line; do
+    USAGE=$(echo "$line" | awk '{print $5}' | tr -d '%')
+    PARTITION=$(echo "$line" | awk '{print $6}')
+    FILESYSTEM=$(echo "$line" | awk '{print $1}')
+
+    if [ "$USAGE" -ge "$THRESHOLD" ]; then
+        ALERT_TRIGGERED=1
+        REPORT+="WARNING: $FILESYSTEM mounted on $PARTITION is at ${USAGE}% (threshold: ${THRESHOLD}%)\n"
+    fi
+done < <(df -h | grep -E '^/dev/')
+
+if [ "$ALERT_TRIGGERED" -eq 1 ]; then
+    echo -e "Disk usage alert on $HOSTNAME\n\n$REPORT" | \
+        mail -s "[ALERT] Disk usage threshold exceeded on $HOSTNAME" "$ALERT_EMAIL"
+    echo -e "$REPORT"
+else
+    echo "All filesystems are below ${THRESHOLD}% usage. No alert sent."
+fi
