@@ -1,35 +1,28 @@
 #!/bin/bash
-#
-# disk_alert.sh - Alert if disk usage crosses a threshold
-# Usage: ./disk_alert.sh [threshold_percent]
-#
-# Default threshold is 80%. Sends an email alert via sendmail/mailx
-# if any mounted filesystem exceeds the threshold.
+# Checks disk usage against a threshold and mails the team if breached
+# Default threshold 80%, override with arg1
+# Add to cron, e.g. every 15 min: */15 * * * * /opt/scripts/disk_alert.sh
 
-set -euo pipefail
+set -eu
 
-THRESHOLD="${1:-80}"
-ALERT_EMAIL="admin@example.com"
-HOSTNAME=$(hostname)
+THRESHOLD=${1:-80}
+ADMIN_MAIL="admin@example.com"
+HOST=$(hostname)
+FLAG=0
+MSG=""
 
-ALERT_TRIGGERED=0
-REPORT=""
-
-while read -r line; do
-    USAGE=$(echo "$line" | awk '{print $5}' | tr -d '%')
-    PARTITION=$(echo "$line" | awk '{print $6}')
-    FILESYSTEM=$(echo "$line" | awk '{print $1}')
-
-    if [ "$USAGE" -ge "$THRESHOLD" ]; then
-        ALERT_TRIGGERED=1
-        REPORT+="WARNING: $FILESYSTEM mounted on $PARTITION is at ${USAGE}% (threshold: ${THRESHOLD}%)\n"
+while read -r FS SIZE USED AVAIL PCT MOUNT; do
+    PCT_NUM=${PCT%\%}
+    if [ "$PCT_NUM" -ge "$THRESHOLD" ]; then
+        FLAG=1
+        MSG="$MSG\n$MOUNT ($FS) is at $PCT - check ASAP"
     fi
 done < <(df -h | grep -E '^/dev/')
 
-if [ "$ALERT_TRIGGERED" -eq 1 ]; then
-    echo -e "Disk usage alert on $HOSTNAME\n\n$REPORT" | \
-        mail -s "[ALERT] Disk usage threshold exceeded on $HOSTNAME" "$ALERT_EMAIL"
-    echo -e "$REPORT"
+if [ "$FLAG" -eq 1 ]; then
+    echo -e "Disk threshold (${THRESHOLD}%) crossed on $HOST:$MSG" | \
+        mail -s "Disk Alert - $HOST" "$ADMIN_MAIL"
+    echo -e "Alert sent.$MSG"
 else
-    echo "All filesystems are below ${THRESHOLD}% usage. No alert sent."
+    echo "All good, nothing over ${THRESHOLD}%."
 fi
