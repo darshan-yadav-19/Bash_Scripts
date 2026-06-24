@@ -1,32 +1,12 @@
 #!/bin/bash
-# Rotates and trims old logs from a given directory
-# .log files older than $DAYS get gzipped, .log.gz older than 30 days get removed
-# Run with --dry-run first on any new server before scheduling it
 
-set -eu
+LOG_DIR="/var/log"
+DAYS=30
 
-DIR=${1:?usage: log_cleanup.sh /path/to/logs [days] [--dry-run]}
-DAYS=${2:-7}
-DRY=${3:-}
+echo "Starting log cleanup..."
+echo "Removing log files older than $DAYS days"
 
-[ -d "$DIR" ] || { echo "$DIR not found"; exit 1; }
+find $LOG_DIR -type f -name "*.log" -mtime +$DAYS -exec rm -f {} \;
 
-echo "Checking $DIR (logs older than $DAYS days)"
-
-find "$DIR" -name "*.log" -mtime +"$DAYS" | while read -r f; do
-    if [ "$DRY" = "--dry-run" ]; then
-        echo "would gzip: $f"
-    else
-        gzip "$f" && echo "gzipped: $f"
-    fi
-done
-
-find "$DIR" -name "*.log.gz" -mtime +30 | while read -r f; do
-    if [ "$DRY" = "--dry-run" ]; then
-        echo "would remove: $f"
-    else
-        rm -f "$f" && echo "removed: $f"
-    fi
-done
-
-echo "done"
+echo "Log cleanup completed"
+echo "Date: $(date)"
